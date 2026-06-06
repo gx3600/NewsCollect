@@ -1,0 +1,90 @@
+# News source configurations
+# Each source defines: url, selectors, crawl interval, fetcher type
+# fetch_content: if true (default), crawl article detail pages to extract full body text
+
+sources:
+  cnbc:
+    enabled: true
+    url: "https://www.cnbc.com/world/?region=world"
+    interval: 300
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    selectors:
+      article: ".Card-titleAndFooter, .LatestNews-item"
+      title: "a::text, .LatestNews-headline::text"
+      link: "a::attr(href)"
+      time: "time::attr(datetime)"
+      category: ".Card-channel::text"
+
+  yahoo_finance:
+    enabled: true
+    url: "https://finance.yahoo.com/news/"
+    interval: 300
+    use_stealth: true
+    download_delay: 2.0
+    fetch_content: true
+    selectors:
+      article: "a[href]"
+      title: "::text"
+      link: "::attr(href)"
+
+  marketwatch:
+    enabled: true
+    url: "https://www.marketwatch.com/latest-news?mod=side_nav"
+    interval: 600
+    use_stealth: false
+    download_delay: 2.0
+    fetch_content: true
+    selectors:
+      article: ".article__content, article, [class*=article]"
+      title: "a::text, h3 a::text, .article__headline a::text"
+      link: "a::attr(href)"
+
+  eastmoney:
+    enabled: true
+    url: "https://finance.eastmoney.com/a/czqyw.html"
+    interval: 120
+    use_stealth: false
+    download_delay: 0.5
+    fetch_content: true
+    selectors:
+      article: ".list-wrap li, [class*=main] li, li"
+      title: "a::text"
+      link: "a::attr(href)"
+
+  wallstreetcn:
+    enabled: true
+    url: "https://wallstreetcn.com/news/global"
+    interval: 120
+    use_stealth: true
+    download_delay: 2.0
+    fetch_content: true
+    selectors:
+      article: "a[href]"
+      title: "::text"
+      link: "::attr(href)"
+
+  xueqiu:
+    enabled: true
+    url: "https://xueqiu.com/today"
+    interval: 120
+    use_stealth: true
+    download_delay: 2.0
+    fetch_content: true
+    selectors:
+      article: "a[href]"
+      title: "::text"
+      link: "::attr(href)"
+
+  sina_finance:
+    enabled: true
+    url: "https://finance.sina.com.cn/"
+    interval: 300
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    selectors:
+      article: "a[href]"
+      title: "::text"
+      link: "::attr(href)"
