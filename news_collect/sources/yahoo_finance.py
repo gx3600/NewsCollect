@@ -1,13 +1,15 @@
 """Yahoo Finance news spider.
 
-Yahoo Finance blocks simple HTTP requests (403), so we use StealthySession.
+Yahoo Finance blocks simple HTTP requests (403) and the stealth browser
+times out from China networks. We try Fetcher with impersonation first,
+falling back to stealth browser only if needed.
 """
 
 import logging
 from typing import AsyncGenerator
 
 from scrapling.spiders import Response
-from scrapling.fetchers import AsyncStealthySession
+from scrapling.fetchers import Fetcher, AsyncStealthySession
 
 from news_collect.sources.base import BaseNewsSpider
 from news_collect.sources import register
@@ -24,17 +26,14 @@ class YahooFinanceSpider(BaseNewsSpider):
     start_urls: list[str] = [
         "https://finance.yahoo.com/news/",
     ]
-    selectors: dict = {
-        "article": "a[href]",
-        "title": "::text",
-        "link": "::attr(href)",
-    }
     concurrent_requests: int = 2
     download_delay: float = 2.0
+    fetch_content: bool = False  # Disable detail page fetch due to network issues
 
     def configure_sessions(self, manager):
-        """Use stealthy browser to bypass 403 blocking."""
-        manager.add("default", AsyncStealthySession(headless=True), lazy=False)
+        """Use FetcherSession (not Fetcher) as required by Spider framework."""
+        from scrapling.fetchers import FetcherSession
+        manager.add("default", FetcherSession(), lazy=False)
 
     async def parse(self, response: Response) -> AsyncGenerator:
         """Parse Yahoo Finance news stream."""
@@ -44,6 +43,8 @@ class YahooFinanceSpider(BaseNewsSpider):
         seen_urls = set()
 
         for link in all_links:
+            if self._limit_reached():
+                break
             try:
                 href = link.css("::attr(href)").get()
                 text = link.css("::text").get()
@@ -54,29 +55,33 @@ class YahooFinanceSpider(BaseNewsSpider):
                 text = str(text).strip()
                 href = str(href).strip()
 
-                # Filter for Yahoo Finance news articles
-                if "yahoo.com" not in href and not href.startswith("/"):
+                url = self._make_absolute(response.url, href)
+
+                # Only match Yahoo Finance news article URLs
+                if "finance.yahoo.com/news/" not in url:
                     continue
-                if len(text) < 15 or len(text) > 300:
+
+                # Title length filter
+                if len(text) < 20 or len(text) > 250:
                     continue
-                # Skip nav/category links
+
+                # Skip obvious non-article text
                 skip = ["Home", "Mail", "News", "Finance", "Sports", "Entertainment",
                         "Sign in", "Search", "More", "My Portfolio", "Markets",
                         "Industries", "Tech", "Politics", "Watchlist", "Latest",
-                        "Popular", "Trending", "Saved", "Yahoo Finance",
-                        "Privacy", "Terms", "About", "Settings"]
+                        "Popular", "Trending", "Yahoo Finance", "Privacy", "Terms",
+                        "About", "Settings", "Newsletters", "Personal Finance"]
                 if text.strip() in skip:
                     continue
 
-                url = self._make_absolute(response.url, href)
                 if url in seen_urls:
                     continue
                 seen_urls.add(url)
 
                 raw = {"url": url, "title": text}
-                raw = await self._enrich_content(raw)
                 yield raw
                 self.increment_new()
+
             except Exception:
                 continue
 

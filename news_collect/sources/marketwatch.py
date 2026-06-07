@@ -28,6 +28,14 @@ class MarketWatchSpider(BaseNewsSpider):
     concurrent_requests: int = 3
     download_delay: float = 2.0
     robots_txt_obey: bool = False  # MarketWatch blocks /latest-news in robots.txt
+    fetch_content: bool = False  # MarketWatch returns 401 on article detail pages
+
+    # MarketWatch-specific article content selectors
+    content_selectors: list[str] = [
+        "[data-type=\"paragraph\"]::text",
+        ".StyledNewsKitParagraph::text",
+        "p::text",
+    ]
 
     async def parse(self, response: Response) -> AsyncGenerator:
         """Parse MarketWatch latest news."""
@@ -39,6 +47,8 @@ class MarketWatchSpider(BaseNewsSpider):
         count = 0
 
         for link in all_links:
+            if self._limit_reached():
+                break
             try:
                 href = link.css("::attr(href)").get()
                 text = link.css("::text").get()

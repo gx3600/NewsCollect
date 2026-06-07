@@ -53,6 +53,8 @@ class EastMoneySpider(BaseNewsSpider):
 
         items_to_parse = filtered if filtered else (all_links if not filtered else [])
         for article in items_to_parse:
+            if self._limit_reached():
+                break
             try:
                 if filtered:
                     raw = await self.parse_article(response, article)

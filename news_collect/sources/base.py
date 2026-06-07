@@ -86,6 +86,10 @@ class BaseNewsSpider(Spider):
     robots_txt_obey: bool = True
     development_mode: bool = False  # Scrapling built-in: cache responses for dev
 
+    # ── rate / limit ──────────────────────────────────────
+
+    max_items: int = 10  # Max articles per crawl (0 = unlimited)
+
     def __init__(self, *args, **kwargs):
         if not self.source_name:
             self.source_name = self.name
@@ -94,6 +98,10 @@ class BaseNewsSpider(Spider):
         self._storage = kwargs.pop("storage", None)
         self._stats = {"crawled": 0, "new": 0, "skipped": 0}
         super().__init__(*args, **kwargs)
+
+    def _limit_reached(self) -> bool:
+        """Check if we've reached the per-crawl item limit."""
+        return self.max_items > 0 and self._stats["new"] >= self.max_items
 
     # ── extraction helpers ─────────────────────────────────
 

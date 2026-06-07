@@ -42,6 +42,8 @@ class CNBCSpider(BaseNewsSpider):
         logger.debug(f"Found {len(articles)} articles on {response.url}")
 
         for article in articles:
+            if self._limit_reached():
+                break
             try:
                 raw = await self.parse_article(response, article)
                 if raw:

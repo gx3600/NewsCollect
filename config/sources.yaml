@@ -1,15 +1,17 @@
 # News source configurations
 # Each source defines: url, selectors, crawl interval, fetcher type
 # fetch_content: if true (default), crawl article detail pages to extract full body text
+# max_items: max articles per crawl (default 10)
 
 sources:
   cnbc:
     enabled: true
     url: "https://www.cnbc.com/world/?region=world"
-    interval: 300
+    interval: 60
     use_stealth: false
     download_delay: 1.0
     fetch_content: true
+    max_items: 10
     selectors:
       article: ".Card-titleAndFooter, .LatestNews-item"
       title: "a::text, .LatestNews-headline::text"
@@ -18,12 +20,13 @@ sources:
       category: ".Card-channel::text"
 
   yahoo_finance:
-    enabled: true
+    enabled: false  # 403 from China; requires proxy/VPN
     url: "https://finance.yahoo.com/news/"
-    interval: 300
+    interval: 60
     use_stealth: true
     download_delay: 2.0
     fetch_content: true
+    max_items: 10
     selectors:
       article: "a[href]"
       title: "::text"
@@ -32,10 +35,11 @@ sources:
   marketwatch:
     enabled: true
     url: "https://www.marketwatch.com/latest-news?mod=side_nav"
-    interval: 600
+    interval: 60
     use_stealth: false
     download_delay: 2.0
     fetch_content: true
+    max_items: 10
     selectors:
       article: ".article__content, article, [class*=article]"
       title: "a::text, h3 a::text, .article__headline a::text"
@@ -44,10 +48,11 @@ sources:
   eastmoney:
     enabled: true
     url: "https://finance.eastmoney.com/a/czqyw.html"
-    interval: 120
+    interval: 60
     use_stealth: false
     download_delay: 0.5
     fetch_content: true
+    max_items: 10
     selectors:
       article: ".list-wrap li, [class*=main] li, li"
       title: "a::text"
@@ -56,10 +61,11 @@ sources:
   wallstreetcn:
     enabled: true
     url: "https://wallstreetcn.com/news/global"
-    interval: 120
-    use_stealth: true
-    download_delay: 2.0
-    fetch_content: true
+    interval: 60
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: false  # API returns content_short
+    max_items: 10
     selectors:
       article: "a[href]"
       title: "::text"
@@ -68,10 +74,11 @@ sources:
   xueqiu:
     enabled: true
     url: "https://xueqiu.com/today"
-    interval: 120
+    interval: 60
     use_stealth: true
     download_delay: 2.0
     fetch_content: true
+    max_items: 10
     selectors:
       article: "a[href]"
       title: "::text"
@@ -80,10 +87,50 @@ sources:
   sina_finance:
     enabled: true
     url: "https://finance.sina.com.cn/"
-    interval: 300
+    interval: 60
     use_stealth: false
     download_delay: 1.0
     fetch_content: true
+    max_items: 10
+    selectors:
+      article: "a[href]"
+      title: "::text"
+      link: "::attr(href)"
+
+  mysteel:
+    enabled: true
+    url: "https://list1.mysteel.com/article/p-1947----02---------2.html"
+    interval: 60
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    max_items: 10
+    selectors:
+      article: "a[href]"
+      title: "::text"
+      link: "::attr(href)"
+
+  jrj_futures:
+    enabled: true
+    url: "https://futures.jrj.com.cn/"
+    interval: 60
+    use_stealth: true
+    download_delay: 3.0
+    fetch_content: true
+    max_items: 10
+    selectors:
+      article: "a[href]"
+      title: "::text"
+      link: "::attr(href)"
+
+  xinhua:
+    enabled: true
+    url: "https://www.news.cn/fortune/index.htm"
+    interval: 60
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    max_items: 10
     selectors:
       article: "a[href]"
       title: "::text"

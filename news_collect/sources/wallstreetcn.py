@@ -1,81 +1,121 @@
 """华尔街见闻 (WallStreetCN) financial news spider.
 
-WallStreetCN is a JavaScript SPA, so we use StealthySession to render JS.
+WallStreetCN is a JavaScript SPA that loads content via API.
+We call the API directly using curl_cffi to avoid Scrapling framework interference.
 """
 
+import json
 import logging
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from scrapling.spiders import Response
-from scrapling.fetchers import AsyncStealthySession
 
 from news_collect.sources.base import BaseNewsSpider
 from news_collect.sources import register
 
 logger = logging.getLogger(__name__)
 
+# WallStreetCN API endpoints
+INFO_FLOW_API = "https://api-one.wallstcn.com/apiv1/content/information-flow?channel=global-channel&limit=50"
+LIVES_API = "https://api-one.wallstcn.com/apiv1/content/lives?channel=global-channel&client=pc&limit=50&first_page=true"
+
 
 @register
 class WallStreetCNSpider(BaseNewsSpider):
-    """Spider for 华尔街见闻 (WallStreetCN) global financial news."""
+    """Spider for 华尔街见闻 (WallStreetCN) global financial news.
+
+    Uses the WallStreetCN API directly for reliable data extraction.
+    """
 
     name: str = "wallstreetcn"
     source_name: str = "wallstreetcn"
     start_urls: list[str] = [
-        "https://wallstreetcn.com/news/global",
+        "https://wallstreetcn.com/news/global",  # Placeholder; API called manually
     ]
-    selectors: dict = {
-        "article": "article, [class*=article], [class*=item], [class*=card]",
-        "title": "a::text, h3::text",
-        "link": "a::attr(href)",
-    }
     concurrent_requests: int = 2
-    download_delay: float = 2.0
-
-    def configure_sessions(self, manager):
-        """Use stealthy browser session to render JavaScript."""
-        manager.add("default", AsyncStealthySession(headless=True), lazy=False)
+    download_delay: float = 1.0
+    fetch_content: bool = False  # API already returns content_short
 
     async def parse(self, response: Response) -> AsyncGenerator:
-        """Parse WallStreetCN global news page."""
-        logger.info(f"Crawling WallStreetCN: {response.url}")
+        """Fetch WallStreetCN APIs and parse JSON responses."""
+        logger.info("Crawling WallStreetCN via API")
 
-        # Find all links with useful text
-        all_links = response.css("a[href]")
-        seen_urls = set()
+        try:
+            from curl_cffi import requests as curl_requests
+        except ImportError:
+            logger.error("curl_cffi not available")
+            return
 
-        for link in all_links:
+        # Collect items from both APIs
+        all_items = []
+        seen_uris = set()
+
+        for api_url in [INFO_FLOW_API, LIVES_API]:
             try:
-                href = link.css("::attr(href)").get()
-                text = link.css("::text").get()
-
-                if not href or not text:
-                    continue
-
-                text = str(text).strip()
-                href = str(href).strip()
-
-                # Filter for wallstreetcn article pages
-                if "wallstreetcn.com" not in href and not href.startswith("/"):
-                    continue
-                if len(text) < 10 or len(text) > 300:
-                    continue
-                # Skip obvious non-article text
-                skip = ["首页", "快讯", "资讯", "专栏", "会员", "直播", "搜索",
-                        "登录", "注册", "热门", "最新", "推荐", "更多"]
-                if text in skip:
-                    continue
-
-                url = self._make_absolute(response.url, href)
-                if url in seen_urls:
-                    continue
-                seen_urls.add(url)
-
-                raw = {"url": url, "title": text}
-                raw = await self._enrich_content(raw)
-                yield raw
-                self.increment_new()
+                api_resp = curl_requests.get(api_url, impersonate="chrome", timeout=15)
+                body = api_resp.text
+                data = json.loads(body) if isinstance(body, str) else body
             except Exception as e:
+                logger.warning(f"Failed to fetch {api_url}: {e}")
                 continue
 
-        logger.info(f"WallStreetCN crawl complete: {self.stats['new']} new")
+            raw_items = []
+            if isinstance(data, dict):
+                raw_data = data.get("data", {})
+                if isinstance(raw_data, dict):
+                    raw_items = raw_data.get("items", [])
+
+            for item in raw_items:
+                try:
+                    # Handle info-flow format: resource is nested
+                    resource = item.get("resource", item)
+
+                    title = resource.get("title", "")
+                    uri = resource.get("uri", "")
+                    content_text = resource.get("content_text", "") or resource.get("content_short", "") or resource.get("content", "")
+                    display_time = resource.get("display_time")
+                    resource_type = item.get("resource_type", resource.get("type", ""))
+
+                    if not title or not uri:
+                        continue
+
+                    title = str(title).strip()
+                    uri = str(uri).strip()
+
+                    if len(title) < 10 or len(title) > 300:
+                        continue
+
+                    if uri in seen_uris:
+                        continue
+                    seen_uris.add(uri)
+
+                    pub_time = None
+                    if display_time:
+                        try:
+                            pub_time = datetime.fromtimestamp(int(display_time), tz=timezone.utc)
+                        except (ValueError, TypeError):
+                            pass
+
+                    raw = {
+                        "url": uri,
+                        "title": title,
+                        "content": str(content_text).strip() if content_text else None,
+                        "publish_time": pub_time,
+                    }
+                    all_items.append(raw)
+                    if len(all_items) >= self.max_items:
+                        break
+
+                except Exception as e:
+                    continue
+
+            if len(all_items) >= self.max_items:
+                break
+
+        # Yield collected items (up to max_items)
+        for raw in all_items[:self.max_items]:
+            yield raw
+            self.increment_new()
+
+        logger.info(f"WallStreetCN crawl complete: {self.stats['new']} new from {len(all_items)} items")

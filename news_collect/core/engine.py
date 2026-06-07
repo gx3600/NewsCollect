@@ -153,6 +153,7 @@ class CrawlerEngine:
         spider.development_mode = dev_mode
         spider.download_delay = source_cfg.download_delay
         spider.fetch_content = source_cfg.fetch_content
+        spider.max_items = getattr(source_cfg, "max_items", 10)
 
         # start() blocks until complete (uses anyio.run internally)
         result = spider.start()

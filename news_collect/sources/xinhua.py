@@ -1,13 +1,12 @@
-"""雪球 (Xueqiu) financial news spider.
+"""新华网 (Xinhua) financial news spider.
 
-Xueqiu is a JavaScript SPA — requires StealthySession for rendering.
+Crawls the fortune (财经) section of xinhuanet.com.
 """
 
 import logging
 from typing import AsyncGenerator
 
 from scrapling.spiders import Response
-from scrapling.fetchers import AsyncStealthySession
 
 from news_collect.sources.base import BaseNewsSpider
 from news_collect.sources import register
@@ -16,29 +15,33 @@ logger = logging.getLogger(__name__)
 
 
 @register
-class XueqiuSpider(BaseNewsSpider):
-    """Spider for 雪球 (Xueqiu) trending posts/news."""
+class XinhuaSpider(BaseNewsSpider):
+    """Spider for 新华网 (Xinhua) fortune/financial news."""
 
-    name: str = "xueqiu"
-    source_name: str = "xueqiu"
+    name: str = "xinhua"
+    source_name: str = "xinhua"
     start_urls: list[str] = [
-        "https://xueqiu.com/today",
+        "https://www.news.cn/fortune/index.htm",
     ]
     selectors: dict = {
         "article": "a[href]",
         "title": "::text",
         "link": "::attr(href)",
     }
-    concurrent_requests: int = 1
-    download_delay: float = 2.0
+    concurrent_requests: int = 3
+    download_delay: float = 1.0
 
-    def configure_sessions(self, manager):
-        """Use stealthy browser to render JavaScript."""
-        manager.add("default", AsyncStealthySession(headless=True), lazy=False)
+    # Xinhua-specific content selectors
+    content_selectors: list[str] = [
+        "#detail p::text",
+        "#detail::text",
+        ".main-left p::text",
+        "p::text",
+    ]
 
     async def parse(self, response: Response) -> AsyncGenerator:
-        """Parse Xueqiu trending page."""
-        logger.info(f"Crawling Xueqiu: {response.url}")
+        """Parse Xinhua fortune index page."""
+        logger.info(f"Crawling Xinhua: {response.url}")
 
         all_links = response.css("a[href]")
         seen_urls = set()
@@ -56,10 +59,20 @@ class XueqiuSpider(BaseNewsSpider):
                 text = str(text).strip()
                 href = str(href).strip()
 
-                # Filter for Xueqiu post/topic pages
-                if "xueqiu.com" not in href and not href.startswith("/"):
+                # Filter for Xinhua fortune article pages
+                if "/fortune/" not in href or not href.endswith("c.html"):
                     continue
-                if len(text) < 8 or len(text) > 300:
+
+                # Title quality filter
+                if len(text) < 15 or len(text) > 200:
+                    continue
+
+                # Skip navigation/tag links
+                skip_prefixes = [
+                    "新华网", "新华社", "财经", "首页", "更多",
+                    "返回", "关于我们", "联系我们", "广告服务",
+                ]
+                if any(text.startswith(p) for p in skip_prefixes):
                     continue
 
                 url = self._make_absolute(response.url, href)
@@ -71,7 +84,8 @@ class XueqiuSpider(BaseNewsSpider):
                 raw = await self._enrich_content(raw)
                 yield raw
                 self.increment_new()
+
             except Exception:
                 continue
 
-        logger.info(f"Xueqiu crawl complete: {self.stats['new']} new")
+        logger.info(f"Xinhua crawl complete: {self.stats['new']} new")

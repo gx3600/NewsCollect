@@ -38,6 +38,8 @@ class SinaFinanceSpider(BaseNewsSpider):
         count = 0
 
         for link in all_links:
+            if self._limit_reached():
+                break
             try:
                 href = link.css("::attr(href)").get()
                 text = link.css("::text").get()

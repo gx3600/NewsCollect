@@ -19,6 +19,7 @@ class SourceConfig:
     use_dynamic: bool = False        # use DynamicFetcher (full browser)
     download_delay: float = 1.0      # seconds between requests
     fetch_content: bool = True       # fetch full article body from detail pages
+    max_items: int = 10              # max articles per crawl
     selectors: dict = field(default_factory=dict)
     extra: dict = field(default_factory=dict)
 
@@ -33,6 +34,7 @@ class SourceConfig:
             use_dynamic=data.get("use_dynamic", False),
             download_delay=data.get("download_delay", 1.0),
             fetch_content=data.get("fetch_content", True),
+            max_items=data.get("max_items", 10),
             selectors=data.get("selectors", {}),
             extra=data.get("extra", {}),
         )

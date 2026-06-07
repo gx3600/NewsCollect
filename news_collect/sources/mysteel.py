@@ -1,13 +1,12 @@
-"""雪球 (Xueqiu) financial news spider.
+"""Mysteel (我的钢铁网) commodity/futures news spider.
 
-Xueqiu is a JavaScript SPA — requires StealthySession for rendering.
+Crawls the non-ferrous metals news section.
 """
 
 import logging
 from typing import AsyncGenerator
 
 from scrapling.spiders import Response
-from scrapling.fetchers import AsyncStealthySession
 
 from news_collect.sources.base import BaseNewsSpider
 from news_collect.sources import register
@@ -16,29 +15,30 @@ logger = logging.getLogger(__name__)
 
 
 @register
-class XueqiuSpider(BaseNewsSpider):
-    """Spider for 雪球 (Xueqiu) trending posts/news."""
+class MysteelSpider(BaseNewsSpider):
+    """Spider for Mysteel (我的钢铁网) commodity news."""
 
-    name: str = "xueqiu"
-    source_name: str = "xueqiu"
+    name: str = "mysteel"
+    source_name: str = "mysteel"
     start_urls: list[str] = [
-        "https://xueqiu.com/today",
+        "https://list1.mysteel.com/article/p-1947----02---------2.html",
     ]
-    selectors: dict = {
-        "article": "a[href]",
-        "title": "::text",
-        "link": "::attr(href)",
-    }
-    concurrent_requests: int = 1
-    download_delay: float = 2.0
+    concurrent_requests: int = 3
+    download_delay: float = 1.0
 
-    def configure_sessions(self, manager):
-        """Use stealthy browser to render JavaScript."""
-        manager.add("default", AsyncStealthySession(headless=True), lazy=False)
+    content_selectors: list[str] = [
+        "#article-content::text",
+        ".editor::text",
+        ".content-text::text",
+        "#content-text::text",
+        ".content-main::text",
+        "[class*=content]::text",
+        "p::text",
+    ]
 
     async def parse(self, response: Response) -> AsyncGenerator:
-        """Parse Xueqiu trending page."""
-        logger.info(f"Crawling Xueqiu: {response.url}")
+        """Parse Mysteel news list page."""
+        logger.info(f"Crawling Mysteel: {response.url}")
 
         all_links = response.css("a[href]")
         seen_urls = set()
@@ -56,10 +56,14 @@ class XueqiuSpider(BaseNewsSpider):
                 text = str(text).strip()
                 href = str(href).strip()
 
-                # Filter for Xueqiu post/topic pages
-                if "xueqiu.com" not in href and not href.startswith("/"):
+                # Match mysteel article URLs: /a/YYMMDDHH/xxxx.html
+                if "/a/" not in href or not href.endswith(".html"):
                     continue
-                if len(text) < 8 or len(text) > 300:
+                if "mysteel.com" not in href and not href.startswith("/"):
+                    continue
+
+                # Title quality filter
+                if len(text) < 15 or len(text) > 200:
                     continue
 
                 url = self._make_absolute(response.url, href)
@@ -71,7 +75,8 @@ class XueqiuSpider(BaseNewsSpider):
                 raw = await self._enrich_content(raw)
                 yield raw
                 self.increment_new()
+
             except Exception:
                 continue
 
-        logger.info(f"Xueqiu crawl complete: {self.stats['new']} new")
+        logger.info(f"Mysteel crawl complete: {self.stats['new']} new")
