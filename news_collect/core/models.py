@@ -16,6 +16,7 @@ class NewsItem:
     publish_time: Optional[datetime] = None
     crawl_time: datetime = field(default_factory=datetime.now)
     category: Optional[str] = None
+    processed: int = 0
     raw_data: Optional[dict] = None
 
     def to_dict(self) -> dict:

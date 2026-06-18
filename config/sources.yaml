@@ -1,137 +1,265 @@
-# News source configurations
-# Each source defines: url, selectors, crawl interval, fetcher type
-# fetch_content: if true (default), crawl article detail pages to extract full body text
-# max_items: max articles per crawl (default 10)
-
 sources:
-  cnbc:
-    enabled: true
-    url: "https://www.cnbc.com/world/?region=world"
-    interval: 60
-    use_stealth: false
-    download_delay: 1.0
-    fetch_content: true
-    max_items: 10
-    selectors:
-      article: ".Card-titleAndFooter, .LatestNews-item"
-      title: "a::text, .LatestNews-headline::text"
-      link: "a::attr(href)"
-      time: "time::attr(datetime)"
-      category: ".Card-channel::text"
-
-  yahoo_finance:
-    enabled: false  # 403 from China; requires proxy/VPN
-    url: "https://finance.yahoo.com/news/"
-    interval: 60
-    use_stealth: true
-    download_delay: 2.0
-    fetch_content: true
-    max_items: 10
-    selectors:
-      article: "a[href]"
-      title: "::text"
-      link: "::attr(href)"
-
-  marketwatch:
-    enabled: true
-    url: "https://www.marketwatch.com/latest-news?mod=side_nav"
-    interval: 60
-    use_stealth: false
-    download_delay: 2.0
-    fetch_content: true
-    max_items: 10
-    selectors:
-      article: ".article__content, article, [class*=article]"
-      title: "a::text, h3 a::text, .article__headline a::text"
-      link: "a::attr(href)"
-
   eastmoney:
     enabled: true
-    url: "https://finance.eastmoney.com/a/czqyw.html"
+    url: https://finance.eastmoney.com/a/czqyw.html
     interval: 60
     use_stealth: false
     download_delay: 0.5
     fetch_content: true
-    max_items: 10
+    max_items: 20
     selectors:
-      article: ".list-wrap li, [class*=main] li, li"
-      title: "a::text"
-      link: "a::attr(href)"
-
+      article: .list-wrap li, [class*=main] li, li
+      title: a::text
+      link: a::attr(href)
+  eastmoney_futures:
+    enabled: true
+    url: https://futures.eastmoney.com/a/cqsyw.html
+    interval: 600
+    use_stealth: false
+    download_delay: 0.5
+    fetch_content: true
+    max_items: 15
+    selectors:
+      article: .list-wrap li, [class*=main] li, li
+      title: a::text
+      link: a::attr(href)
   wallstreetcn:
     enabled: true
-    url: "https://wallstreetcn.com/news/global"
+    url: https://wallstreetcn.com/news/global
     interval: 60
     use_stealth: false
     download_delay: 1.0
-    fetch_content: false  # API returns content_short
-    max_items: 10
+    fetch_content: false
+    max_items: 20
     selectors:
-      article: "a[href]"
-      title: "::text"
-      link: "::attr(href)"
-
-  xueqiu:
-    enabled: true
-    url: "https://xueqiu.com/today"
-    interval: 60
-    use_stealth: true
-    download_delay: 2.0
-    fetch_content: true
-    max_items: 10
-    selectors:
-      article: "a[href]"
-      title: "::text"
-      link: "::attr(href)"
-
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
   sina_finance:
     enabled: true
-    url: "https://finance.sina.com.cn/"
+    url: https://finance.sina.com.cn/
     interval: 60
     use_stealth: false
     download_delay: 1.0
     fetch_content: true
-    max_items: 10
+    max_items: 20
     selectors:
-      article: "a[href]"
-      title: "::text"
-      link: "::attr(href)"
-
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  sina_roll:
+    enabled: true
+    url: https://finance.sina.com.cn/roll/c/56995.shtml
+    interval: 600
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    max_items: 15
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
   mysteel:
     enabled: true
-    url: "https://list1.mysteel.com/article/p-1947----02---------2.html"
-    interval: 60
+    url: https://www.mysteel.com/article/p-1947----02---------1.html
+    interval: 600
     use_stealth: false
     download_delay: 1.0
     fetch_content: true
-    max_items: 10
+    max_items: 15
     selectors:
-      article: "a[href]"
-      title: "::text"
-      link: "::attr(href)"
-
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  mysteel_coal:
+    enabled: true
+    url: https://www.mysteel.com/article/p-2575-------------1.html
+    interval: 600
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    max_items: 15
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  mysteel_steel:
+    enabled: true
+    url: https://www.mysteel.com/article/p-3864-------------1.html
+    interval: 600
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    max_items: 15
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  mysteel_news:
+    enabled: true
+    url: https://news.mysteel.com/article/p-3578,1981,8060-------------1.html
+    interval: 600
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    max_items: 15
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  stockstar_futures:
+    enabled: true
+    url: https://futures.stockstar.com/list/2961.shtml
+    interval: 600
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    max_items: 15
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  ths_api:
+    enabled: true
+    url: https://ftapi.10jqka.com.cn/futgwapi/api/news/time_news/v1/news_list
+    interval: 60
+    use_stealth: false
+    download_delay: 0.3
+    fetch_content: false
+    max_items: 20
+  100ppi_futures:
+    enabled: true
+    url: https://futures.100ppi.com/news---1.html
+    interval: 1200
+    use_stealth: false
+    download_delay: 0.5
+    fetch_content: true
+    max_items: 10
   jrj_futures:
     enabled: true
-    url: "https://futures.jrj.com.cn/"
-    interval: 60
+    url: https://futures.jrj.com.cn/
+    interval: 1200
     use_stealth: true
     download_delay: 3.0
     fetch_content: true
     max_items: 10
     selectors:
-      article: "a[href]"
-      title: "::text"
-      link: "::attr(href)"
-
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
   xinhua:
     enabled: true
-    url: "https://www.news.cn/fortune/index.htm"
-    interval: 60
+    url: https://www.news.cn/fortune/index.htm
+    interval: 600
     use_stealth: false
     download_delay: 1.0
     fetch_content: true
-    max_items: 10
+    max_items: 15
     selectors:
-      article: "a[href]"
-      title: "::text"
-      link: "::attr(href)"
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  ths_futures:
+    enabled: true
+    url: https://goodsfu.10jqka.com.cn/qhgd_list/
+    interval: 600
+    use_stealth: false
+    download_delay: 1.0
+    fetch_content: true
+    max_items: 15
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  cls_depth:
+    enabled: true
+    url: https://www.cls.cn/depth?id=1124
+    interval: 600
+    use_stealth: false
+    download_delay: 0.5
+    fetch_content: true
+    max_items: 15
+  cls_telegraph:
+    enabled: true
+    url: https://www.cls.cn/telegraph
+    interval: 60
+    use_stealth: false
+    download_delay: 0.5
+    fetch_content: false
+    max_items: 20
+  shmet:
+    enabled: true
+    url: https://www.shmet.com/column/column-detail-1024-1008.html
+    interval: 1200
+    use_stealth: true
+    download_delay: 5.0
+    fetch_content: true
+    max_items: 5
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  shmet_weekly:
+    enabled: true
+    url: https://www.shmet.com/column/column-detail-1030-1008.html
+    interval: 1200
+    use_stealth: true
+    download_delay: 5.0
+    fetch_content: true
+    max_items: 5
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  shmet_research:
+    enabled: true
+    url: https://www.shmet.com/column/column-detail-1005-1008.html
+    interval: 1200
+    use_stealth: true
+    download_delay: 5.0
+    fetch_content: true
+    max_items: 5
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  shmet_news:
+    enabled: true
+    url: https://www.shmet.com/column/column.html?id=1025&parentId=996
+    interval: 600
+    use_stealth: false
+    download_delay: 0.3
+    fetch_content: true
+    max_items: 15
+  shmet_report:
+    enabled: true
+    url: https://www.shmet.com/column/column-detail-1027-1008.html
+    interval: 1200
+    use_stealth: true
+    download_delay: 5.0
+    fetch_content: true
+    max_items: 5
+    selectors:
+      article: a[href]
+      title: ::text
+      link: ::attr(href)
+  cnn:
+    enabled: true
+    use_rss: true
+    interval: 60
+    max_items: 20
+  bbc:
+    enabled: true
+    use_rss: true
+    interval: 60
+    max_items: 20
+  reuters:
+    enabled: true
+    use_rss: true
+    interval: 60
+    max_items: 20
+  apnews:
+    enabled: true
+    use_rss: true
+    interval: 60
+    max_items: 20

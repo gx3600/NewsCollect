@@ -21,7 +21,7 @@ class CrawlerEngine:
 
     Usage:
         engine = CrawlerEngine()
-        result = engine.run_sources(["cnbc", "reuters"])
+        result = engine.run_sources(["eastmoney", "cls_telegraph"])
         print(result.stats)
     """
 
@@ -138,8 +138,7 @@ class CrawlerEngine:
     ) -> list[NewsItem]:
         """Run a single source spider synchronously and return its items.
 
-        Scrapling's Spider.start() uses anyio.run() internally, which manages
-        its own asyncio event loop.
+        Routes to RSS or Scrapling code path based on ``use_rss`` config flag.
         """
         from news_collect.sources import get_source
 
@@ -147,8 +146,25 @@ class CrawlerEngine:
         if SpiderCls is None:
             raise ValueError(f"Source '{name}' is not registered.")
 
+        # ── RSS source path ───────────────────────────────────
+        if source_cfg.use_rss:
+            spider = SpiderCls(
+                max_items=getattr(source_cfg, "max_items", 0) or 0,
+            )
+            result = spider.start()
+
+            items: list[NewsItem] = []
+            for raw_item in result.items:
+                if isinstance(raw_item, NewsItem):
+                    items.append(raw_item)
+                elif isinstance(raw_item, dict):
+                    items.append(spider.item_to_newsitem(raw_item))
+            return items
+
+        # ── Scrapling (HTML) source path ──────────────────────
+        # Checkpoints only in dev mode — production crawls always start fresh.
         spider = SpiderCls(
-            crawldir=f"data/checkpoints/{name}" if not dev_mode else None,
+            crawldir=f"data/checkpoints/{name}" if dev_mode else None,
         )
         spider.development_mode = dev_mode
         spider.download_delay = source_cfg.download_delay

@@ -16,8 +16,9 @@ log_level: "INFO"
 
 # Proxies (optional, one per line)
 proxies: []
-#  - "http://user:pass@proxy1.example.com:8080"
-#  - "http://user:pass@proxy2.example.com:8080"
+proxy:
+  http: "http://127.0.0.1:7892"
+  https: "http://127.0.0.1:7892"
 
 # User agent (default browser impersonation handles this, fallback only)
 user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"

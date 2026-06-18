@@ -11,7 +11,7 @@ Usage:
         print(name)
 
     # Get a spider class by name
-    SpiderCls = get_source("cnbc")
+    SpiderCls = get_source("eastmoney")
 """
 
 import importlib

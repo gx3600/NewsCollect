@@ -1,7 +1,4 @@
-"""Mysteel (我的钢铁网) commodity/futures news spider.
-
-Crawls the non-ferrous metals news section.
-"""
+"""Mysteel steel (钢铁) news spider."""
 
 import logging, re
 from typing import AsyncGenerator
@@ -13,11 +10,15 @@ from news_collect.sources import register
 
 logger = logging.getLogger(__name__)
 
-LIST_URL = "https://www.mysteel.com/article/p-1947----02---------2.html"
+LIST_URL = "https://www.mysteel.com/article/p-3864-------------1.html"
 
 
 def _fetch_list_html(url: str, max_retries: int = 5) -> str | None:
-    """Fetch list page with fresh curl_cffi session each attempt."""
+    """Fetch list page with fresh curl_cffi session each attempt.
+
+    Scrapling's session reuses cookies across retries, which makes Mysteel
+    keep serving captcha. A fresh session resets the tracking cookie.
+    """
     import time
     from curl_cffi import requests as curl_requests
 
@@ -43,11 +44,11 @@ def _fetch_list_html(url: str, max_retries: int = 5) -> str | None:
 
 
 @register
-class MysteelSpider(BaseNewsSpider):
-    """Spider for Mysteel non-ferrous metals (有色) news."""
+class MysteelSteelSpider(BaseNewsSpider):
+    """Spider for Mysteel steel (钢铁) news."""
 
-    name: str = "mysteel"
-    source_name: str = "mysteel"
+    name: str = "mysteel_steel"
+    source_name: str = "mysteel_steel"
     start_urls: list[str] = [LIST_URL]
     concurrent_requests: int = 3
     download_delay: float = 1.0
@@ -59,21 +60,21 @@ class MysteelSpider(BaseNewsSpider):
         "#text p::text",
         ".editor::text",
         ".content-text::text",
-        "#content-text::text",
-        ".content-main::text",
         "[class*=content]::text",
         "p::text",
     ]
 
     async def parse(self, response: Response) -> AsyncGenerator:
+        # Use curl_cffi (fresh session) for list page to avoid captcha cookies
         html = _fetch_list_html(LIST_URL)
         if not html:
-            logger.error("Mysteel: failed to fetch list page")
+            logger.error("Mysteel Steel: failed to fetch list page")
             return
 
-        logger.info(f"Crawling Mysteel: {LIST_URL}")
+        logger.info(f"Crawling Mysteel Steel: {LIST_URL}")
         seen_urls = set()
 
+        # Extract article links from HTML
         for m in re.finditer(
             r'<a\s+[^>]*href="([^"]*(?:/a/|mysteel\.com/a/)\d+/\w+\.html)[^"]*"[^>]*>([^<]{15,200})</a>',
             html, re.IGNORECASE,
@@ -99,4 +100,4 @@ class MysteelSpider(BaseNewsSpider):
             yield raw
             self.increment_new()
 
-        logger.info(f"Mysteel crawl complete: {self.stats['new']} new")
+        logger.info(f"Mysteel Steel crawl complete: {self.stats['new']} new")

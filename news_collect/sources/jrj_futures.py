@@ -37,7 +37,7 @@ class JRJFuturesSpider(BaseNewsSpider):
 
     def configure_sessions(self, manager):
         """Use stealth browser for SPA rendering + lightweight session for articles."""
-        manager.add("default", AsyncStealthySession(headless=True), lazy=False)
+        manager.add("default", AsyncStealthySession(headless=True, timeout=30000), lazy=False)
         manager.add("content", FetcherSession(), lazy=True)
 
     async def parse(self, response: Response) -> AsyncGenerator:

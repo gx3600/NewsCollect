@@ -42,9 +42,15 @@ class NewsStorage:
                 publish_time TEXT,
                 crawl_time TEXT NOT NULL,
                 category TEXT,
+                processed INTEGER NOT NULL DEFAULT 0,
                 raw_data TEXT
             )
         """)
+        # Add processed column to existing tables (safe to run even if exists)
+        try:
+            conn.execute("ALTER TABLE news ADD COLUMN processed INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass  # column already exists
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_news_source
             ON news(source, crawl_time)
@@ -52,6 +58,10 @@ class NewsStorage:
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_news_publish_time
             ON news(publish_time)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_news_processed
+            ON news(processed, crawl_time)
         """)
         conn.commit()
 
@@ -62,8 +72,8 @@ class NewsStorage:
         try:
             cursor = self._conn.execute(
                 """INSERT OR IGNORE INTO news
-                   (url, title, source, content, publish_time, crawl_time, category, raw_data)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (url, title, source, content, publish_time, crawl_time, category, processed, raw_data)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     item.url,
                     item.title,
@@ -72,6 +82,7 @@ class NewsStorage:
                     item.publish_time.isoformat() if item.publish_time else None,
                     item.crawl_time.isoformat(),
                     item.category,
+                    item.processed,
                     self._serialize_raw(item.raw_data),
                 ),
             )

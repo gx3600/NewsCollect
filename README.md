@@ -6,7 +6,7 @@
 
 ## 功能特性
 
-- 🕷️ **多源爬取** — 8 个中英文金融新闻源（英文：CNBC / Reuters / Yahoo Finance / MarketWatch；中文：东方财富 / 华尔街见闻 / 雪球 / 新浪财经）
+- 🕷️ **多源爬取** — 20 个中英文金融新闻源（东方财富 / 财联社 / 同花顺 / Mysteel / SMM / 生意社 / 新浪 / 华尔街见闻等）
 - 🔌 **插件扩展** — 每个网站一个独立模块，继承 `BaseNewsSpider`，使用 `@register` 装饰器即插即用
 - 💾 **自动去重** — SQLite 存储，URL 唯一约束自动去重
 - ⏰ **定时调度** — 守护进程模式，每个源独立配置更新间隔
@@ -39,7 +39,7 @@ news-collect init
 news-collect run
 
 # 运行指定的源
-news-collect run --source cnbc --source reuters
+news-collect run --source eastmoney --source cls_telegraph
 
 # 开发模式（使用缓存，不发 HTTP 请求）
 news-collect run --dev
@@ -58,7 +58,7 @@ news-collect list-sources
 
 ```bash
 news-collect stats
-news-collect stats --source cnbc --days 30
+news-collect stats --source eastmoney --days 30
 ```
 
 ### 守护进程模式
@@ -83,14 +83,13 @@ NewsCollect/
 │   ├── sources/               # 新闻源插件
 │   │   ├── base.py            # BaseNewsSpider 基类
 │   │   ├── __init__.py        # 注册 & 自动发现
-│   │   ├── cnbc.py
-│   │   ├── reuters.py
-│   │   ├── yahoo_finance.py
-│   │   ├── marketwatch.py
-│   │   ├── eastmoney.py       # 东方财富
-│   │   ├── wallstreetcn.py    # 华尔街见闻
-│   │   ├── xueqiu.py          # 雪球
-│   │   └── sina_finance.py    # 新浪财经
+│   │   ├── eastmoney.py         # 东方财富
+│   │   ├── wallstreetcn.py      # 华尔街见闻
+│   │   ├── cls_telegraph.py     # 财联社电报
+│   │   ├── ths_api.py           # 同花顺期货API
+│   │   ├── mysteel.py           # Mysteel 有色
+│   │   ├── shmet.py             # SMM 五矿日报
+│   │   └── ...                  # 更多源
 │   ├── utils/
 │   │   ├── config.py          # YAML 配置加载
 │   │   └── logging.py         # 日志配置

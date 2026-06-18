@@ -39,7 +39,7 @@ class TestCrawlerEngine:
         result = CrawlResult(
             items=[],
             stats={"total_crawled": 10, "total_new": 5, "total_skipped": 5},
-            source_stats={"cnbc": {"items": 10, "new": 5, "skipped": 5}},
+            source_stats={"eastmoney": {"items": 10, "new": 5, "skipped": 5}},
         )
         assert result.stats["total_new"] == 5
         assert "10" in repr(result)

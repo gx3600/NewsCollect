@@ -24,7 +24,10 @@ htmlcov/
 
 # Runtime data
 data/news.db
+data/news.db-shm
+data/news.db-wal
 data/checkpoints/
+data/daemon.log
 
 # Claude Code
 .claude/

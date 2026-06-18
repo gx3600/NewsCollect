@@ -1,4 +1,7 @@
-"""东方财富 (EastMoney) financial news spider."""
+"""东方财富期货 (EastMoney Futures) news spider.
+
+Same structure as eastmoney; different list page for futures-focused news.
+"""
 
 import logging
 from typing import AsyncGenerator
@@ -12,31 +15,37 @@ logger = logging.getLogger(__name__)
 
 
 @register
-class EastMoneySpider(BaseNewsSpider):
-    """Spider for 东方财富 (EastMoney) financial news."""
+class EastMoneyFuturesSpider(BaseNewsSpider):
+    """Spider for 东方财富期货 (EastMoney Futures) news."""
 
-    name: str = "eastmoney"
-    source_name: str = "eastmoney"
+    name: str = "eastmoney_futures"
+    source_name: str = "eastmoney_futures"
     start_urls: list[str] = [
-        "https://finance.eastmoney.com/a/czqyw.html",
+        "https://futures.eastmoney.com/a/cqsyw.html",
     ]
     selectors: dict = {
         "article": ".list-wrap li, [class*=main] li, li",
         "title": "a::text",
         "link": "a::attr(href)",
-        "time": "span.time::text, .time::text",
     }
     concurrent_requests: int = 3
     download_delay: float = 0.5
 
-    async def parse(self, response: Response) -> AsyncGenerator:
-        """Parse EastMoney financial news list."""
-        logger.info(f"Crawling EastMoney: {response.url}")
+    content_selectors: list[str] = [
+        "#ContentBody p::text",
+        ".txtinfos p::text",
+        ".article-content p::text",
+        ".newsContent p::text",
+        "p::text",
+    ]
 
-        # Try container-based approach first
+    async def parse(self, response: Response) -> AsyncGenerator:
+        """Parse EastMoney Futures news list."""
+        logger.info(f"Crawling EastMoney Futures: {response.url}")
+
         articles = self.extract_all(response, "article")
 
-        # Filter: only elements that have links to /a/ article pages
+        # Filter: only elements with links to /a/ article pages
         filtered = []
         for article in articles:
             link = self.extract(response, "link", article)
@@ -44,12 +53,8 @@ class EastMoneySpider(BaseNewsSpider):
                 filtered.append(article)
 
         if not filtered:
-            # Fallback: directly find all article links
             logger.debug("Container approach found nothing, using direct link approach")
             all_links = response.css("a[href*='/a/']")
-            logger.debug(f"Found {len(all_links)} direct article links")
-
-        logger.debug(f"Found {len(filtered) if filtered else len(all_links) if not filtered else 0} relevant articles")
 
         items_to_parse = filtered if filtered else (all_links if not filtered else [])
         for article in items_to_parse:
@@ -61,7 +66,6 @@ class EastMoneySpider(BaseNewsSpider):
                     if raw:
                         raw = await self._enrich_content(raw)
                 else:
-                    # For direct links, extract differently
                     title = article.css("::text").get()
                     link = article.css("::attr(href)").get()
                     if not title or not link:
@@ -75,7 +79,7 @@ class EastMoneySpider(BaseNewsSpider):
                     yield raw
                     self.increment_new()
             except Exception as e:
-                logger.warning(f"Failed to parse EastMoney article: {e}")
+                logger.warning(f"Failed to parse EastMoney Futures article: {e}")
                 continue
 
-        logger.info(f"EastMoney crawl complete: {self.stats['new']} new")
+        logger.info(f"EastMoney Futures crawl complete: {self.stats['new']} new")

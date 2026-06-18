@@ -315,9 +315,16 @@ class BaseNewsSpider(Spider):
                             # Skip boilerplate
                             if any(bp in t for bp in self._boilerplate_patterns):
                                 continue
-                            # Skip very short fragments (likely nav items)
-                            if len(t) < 8:
+                            # Skip very short fragments (likely nav items, menu links, etc.)
+                            if len(t) < 15:
                                 continue
+                            # Skip nav-like paragraphs: many short tokens (e.g. "热轧 冷轧 型钢"),
+                            # which are product-name menus, not article text.
+                            tokens = t.split()
+                            if len(tokens) > 8:
+                                avg_len = sum(len(tok) for tok in tokens) / len(tokens)
+                                if avg_len < 5:
+                                    continue
                             texts.append(t)
                         content = "\n".join(texts)
                         if len(content) > 100:
@@ -332,19 +339,128 @@ class BaseNewsSpider(Spider):
             return None
 
     async def _enrich_content(self, raw: dict) -> dict:
-        """Enrich a raw item dict with article content if fetch_content is enabled.
+        """Enrich a raw item dict with article content and publish_time.
 
-        Args:
-            raw: Dict with at least 'url' key.
-
-        Returns:
-            The same dict with 'content' key added (or unchanged if disabled/failed).
+        Uses _fetch_article_content for content (can be overridden per spider).
+        Separately extracts time from the article page.
         """
-        if self.fetch_content and "content" not in raw and raw.get("url"):
-            content = await self._fetch_article_content(raw["url"])
+        url = raw.get("url")
+        if not url:
+            return raw
+
+        need_content = self.fetch_content and not raw.get("content")
+        need_time = not raw.get("publish_time")  # None/empty/absent
+
+        if need_content:
+            content = await self._fetch_article_content(url)
             if content:
                 raw["content"] = content
+
+        if need_time:
+            try:
+                from scrapling.spiders.request import Request
+                req = Request(url=url)
+                resp = await self._session_manager.fetch(req)
+                body = resp.body
+                if isinstance(body, bytes):
+                    body = body.decode("utf-8", errors="replace")
+                pt = self._extract_time_from_html(body)
+                if pt:
+                    raw["publish_time"] = pt
+            except Exception:
+                pass
+
         return raw
+
+    @staticmethod
+    def _extract_time_from_html(body: str) -> str | None:
+        """Extract publish time from HTML using common patterns.
+
+        Returns ISO format string or None.
+        """
+        import re
+        from datetime import datetime, timezone
+
+        # 1. Meta tag: article:published_time
+        m = re.search(
+            r'<meta\s+[^>]*property=["\']article:published_time["\'][^>]*content=["\']([^"\']+)["\']',
+            body, re.IGNORECASE
+        )
+        if not m:
+            m = re.search(
+                r'<meta\s+[^>]*name=["\']pubdate["\'][^>]*content=["\']([^"\']+)["\']',
+                body, re.IGNORECASE
+            )
+
+        # 2. time element with datetime
+        if not m:
+            m = re.search(
+                r'<time\s+[^>]*datetime=["\']([^"\']+)["\']',
+                body, re.IGNORECASE
+            )
+
+        if m:
+            return BaseNewsSpider._normalize_datetime(m.group(1))
+
+        # 3. JSON-LD datePublished
+        m = re.search(
+            r'"datePublished"\s*:\s*"([^"]+)"',
+            body
+        )
+        if m:
+            return BaseNewsSpider._normalize_datetime(m.group(1))
+
+        # 4. Common date patterns
+        patterns = [
+            r'\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}',
+            r'\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}',
+            r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}',
+            r'\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}',
+            r'\d{4}年\d{1,2}月\d{1,2}日\s+\d{1,2}:\d{2}',
+            r'\d{4}年\d{1,2}月\d{1,2}日',
+        ]
+        for pat in patterns:
+            m = re.search(pat, body)
+            if m:
+                return BaseNewsSpider._normalize_datetime(m.group(0))
+
+        return None
+
+    @staticmethod
+    def _normalize_datetime(s: str) -> str | None:
+        """Convert a datetime string to ISO format."""
+        from datetime import datetime, timezone
+        import re
+        if not s:
+            return None
+        s = s.strip()
+
+        # Normalize Chinese date format: 2026年06月15日 07:37 -> 2026-06-15 07:37
+        cn_match = re.match(
+            r'(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?', s
+        )
+        if cn_match:
+            y, m, d = cn_match.group(1), cn_match.group(2), cn_match.group(3)
+            hh = cn_match.group(4) or '00'
+            mm = cn_match.group(5) or '00'
+            ss = cn_match.group(6) or '00'
+            s = f"{y}-{m.zfill(2)}-{d.zfill(2)} {hh}:{mm}:{ss}"
+
+        formats = [
+            "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f",
+            "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
+            "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d",
+        ]
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(s, fmt)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.isoformat()
+            except ValueError:
+                continue
+        return None
 
     # ── stats ──────────────────────────────────────────────
 

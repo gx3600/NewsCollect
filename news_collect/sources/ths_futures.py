@@ -1,13 +1,12 @@
-"""雪球 (Xueqiu) financial news spider.
+"""同花顺期货 (10jqka/THS Futures) news spider.
 
-Xueqiu is a JavaScript SPA — requires StealthySession for rendering.
+Crawls the futures/goods news list page.
 """
 
 import logging
 from typing import AsyncGenerator
 
 from scrapling.spiders import Response
-from scrapling.fetchers import AsyncStealthySession
 
 from news_collect.sources.base import BaseNewsSpider
 from news_collect.sources import register
@@ -16,29 +15,28 @@ logger = logging.getLogger(__name__)
 
 
 @register
-class XueqiuSpider(BaseNewsSpider):
-    """Spider for 雪球 (Xueqiu) trending posts/news."""
+class THSFuturesSpider(BaseNewsSpider):
+    """Spider for 同花顺期货 (10jqka) futures news."""
 
-    name: str = "xueqiu"
-    source_name: str = "xueqiu"
+    name: str = "ths_futures"
+    source_name: str = "ths_futures"
     start_urls: list[str] = [
-        "https://xueqiu.com/today",
+        "https://goodsfu.10jqka.com.cn/qhgd_list/",
     ]
-    selectors: dict = {
-        "article": "a[href]",
-        "title": "::text",
-        "link": "::attr(href)",
-    }
-    concurrent_requests: int = 1
-    download_delay: float = 2.0
+    concurrent_requests: int = 3
+    download_delay: float = 1.0
 
-    def configure_sessions(self, manager):
-        """Use stealthy browser to render JavaScript."""
-        manager.add("default", AsyncStealthySession(headless=True), lazy=False)
+    content_selectors: list[str] = [
+        ".article-content p::text",
+        ".news-content p::text",
+        "#main-text p::text",
+        "[class*=content] p::text",
+        "p::text",
+    ]
 
     async def parse(self, response: Response) -> AsyncGenerator:
-        """Parse Xueqiu trending page."""
-        logger.info(f"Crawling Xueqiu: {response.url}")
+        """Parse THS Futures news list."""
+        logger.info(f"Crawling THS Futures: {response.url}")
 
         all_links = response.css("a[href]")
         seen_urls = set()
@@ -56,12 +54,17 @@ class XueqiuSpider(BaseNewsSpider):
                 text = str(text).strip()
                 href = str(href).strip()
 
-                # Filter for Xueqiu post/topic pages
-                if "xueqiu.com" not in href and not href.startswith("/"):
+                # Match article URLs: /YYYYMMDD/cXXXXXX.shtml on 10jqka domains
+                if not href.endswith(".shtml"):
                     continue
-                if len(text) < 8 or len(text) > 300:
+                if "10jqka.com.cn" not in href and not href.startswith("/"):
                     continue
 
+                # Title quality filter
+                if len(text) < 15 or len(text) > 250:
+                    continue
+
+                # Deduplicate titles (many articles appear twice in the list)
                 url = self._make_absolute(response.url, href)
                 if url in seen_urls:
                     continue
@@ -71,7 +74,8 @@ class XueqiuSpider(BaseNewsSpider):
                 raw = await self._enrich_content(raw)
                 yield raw
                 self.increment_new()
+
             except Exception:
                 continue
 
-        logger.info(f"Xueqiu crawl complete: {self.stats['new']} new")
+        logger.info(f"THS Futures crawl complete: {self.stats['new']} new")

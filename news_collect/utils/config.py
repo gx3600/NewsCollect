@@ -15,6 +15,7 @@ class SourceConfig:
     url: str
     enabled: bool = True
     interval: int = 300              # seconds between crawl runs
+    use_rss: bool = False            # RSS/Atom feed source (not HTML scraping)
     use_stealth: bool = False        # use StealthyFetcher
     use_dynamic: bool = False        # use DynamicFetcher (full browser)
     download_delay: float = 1.0      # seconds between requests
@@ -30,6 +31,7 @@ class SourceConfig:
             url=data.get("url", ""),
             enabled=data.get("enabled", True),
             interval=data.get("interval", 300),
+            use_rss=data.get("use_rss", False),
             use_stealth=data.get("use_stealth", False),
             use_dynamic=data.get("use_dynamic", False),
             download_delay=data.get("download_delay", 1.0),
@@ -45,7 +47,7 @@ class Config:
 
     Usage:
         cfg = Config()
-        source_cfg = cfg.get_source("cnbc")
+        source_cfg = cfg.get_source("eastmoney")
         all_sources = cfg.sources
     """
 
