@@ -1,12 +1,13 @@
 """SQLite-based news storage with URL deduplication."""
 
+import json
 import sqlite3
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from news_collect.core.models import NewsItem
+from news_collect.core.models import AnalysisOpinion, NewsEvent, NewsItem
 
 
 class NewsStorage:
@@ -62,6 +63,68 @@ class NewsStorage:
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_news_processed
             ON news(processed, crawl_time)
+        """)
+
+        # ── analysis result tables ─────────────────────────
+        # Migrate: drop old table if schema changed (dev safety — no prod data yet)
+        try:
+            conn.execute("ALTER TABLE analysis_opinions RENAME COLUMN short_term_impact TO short_term_view")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE analysis_opinions RENAME COLUMN long_term_impact TO long_term_view")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE analysis_opinions RENAME COLUMN short_term_reason TO short_term_view_reason")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE analysis_opinions RENAME COLUMN long_term_reason TO long_term_view_reason")
+        except Exception:
+            pass
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS analysis_opinions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                variety TEXT NOT NULL,
+                analysis_date TEXT,
+                short_term_view TEXT,
+                long_term_view TEXT,
+                short_term_view_reason TEXT,
+                long_term_view_reason TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_opinions_url
+            ON analysis_opinions(url)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_opinions_variety
+            ON analysis_opinions(variety, analysis_date)
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS news_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                event_summary TEXT NOT NULL,
+                event_time TEXT,
+                affects_futures INTEGER NOT NULL DEFAULT 0,
+                affected_variety TEXT,
+                impact_analysis TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_events_url
+            ON news_events(url)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_events_time
+            ON news_events(event_time)
         """)
         conn.commit()
 
@@ -181,6 +244,141 @@ class NewsStorage:
             return None
         import json
         return json.dumps(raw_data, ensure_ascii=False)
+
+    # ── analysis methods ──────────────────────────────────
+
+    def fetch_unprocessed(self, limit: int = 50) -> list[dict]:
+        """Fetch unprocessed news items (processed=0), oldest first.
+
+        Returns list of dicts with keys: id, url, title, source, content, publish_time.
+        """
+        rows = self._conn.execute(
+            """SELECT id, url, title, source, content, publish_time
+               FROM news
+               WHERE processed = 0 AND content IS NOT NULL AND content != ''
+               ORDER BY crawl_time ASC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def insert_opinion(self, opinion: AnalysisOpinion) -> bool:
+        """Insert a single analysis opinion record. Returns True on success."""
+        try:
+            self._conn.execute(
+                """INSERT INTO analysis_opinions
+                   (url, variety, analysis_date, short_term_view,
+                    long_term_view, short_term_view_reason, long_term_view_reason, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    opinion.url,
+                    opinion.variety,
+                    opinion.analysis_date,
+                    opinion.short_term_view,
+                    opinion.long_term_view,
+                    opinion.short_term_view_reason,
+                    opinion.long_term_view_reason,
+                    opinion.created_at,
+                ),
+            )
+            self._conn.commit()
+            return True
+        except Exception:
+            return False
+
+    def insert_opinions_batch(self, opinions: list[AnalysisOpinion]) -> int:
+        """Batch insert opinion records. Returns count inserted."""
+        count = 0
+        for op in opinions:
+            if self.insert_opinion(op):
+                count += 1
+        return count
+
+    def insert_event(self, event: NewsEvent) -> bool:
+        """Insert a single news event record. Returns True on success."""
+        try:
+            self._conn.execute(
+                """INSERT INTO news_events
+                   (url, event_summary, event_time, affects_futures,
+                    affected_variety, impact_analysis, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    event.url,
+                    event.event_summary,
+                    event.event_time,
+                    1 if event.affects_futures else 0,
+                    event.affected_variety,
+                    event.impact_analysis,
+                    event.created_at,
+                ),
+            )
+            self._conn.commit()
+            return True
+        except Exception:
+            return False
+
+    def insert_events_batch(self, events: list[NewsEvent]) -> int:
+        """Batch insert event records. Returns count inserted."""
+        count = 0
+        for ev in events:
+            if self.insert_event(ev):
+                count += 1
+        return count
+
+    def mark_processed(self, url: str) -> bool:
+        """Mark a news item as processed (processed=1)."""
+        try:
+            self._conn.execute(
+                "UPDATE news SET processed = 1 WHERE url = ?", (url,)
+            )
+            self._conn.commit()
+            return True
+        except Exception:
+            return False
+
+    def mark_processed_batch(self, urls: list[str]) -> int:
+        """Mark multiple URLs as processed. Returns count updated."""
+        if not urls:
+            return 0
+        try:
+            placeholders = ",".join("?" for _ in urls)
+            cursor = self._conn.execute(
+                f"UPDATE news SET processed = 1 WHERE url IN ({placeholders})",
+                urls,
+            )
+            self._conn.commit()
+            return cursor.rowcount
+        except Exception:
+            return 0
+
+    def unprocessed_count(self) -> int:
+        """Return the count of unprocessed news items with content."""
+        row = self._conn.execute(
+            "SELECT COUNT(*) as cnt FROM news WHERE processed = 0 AND content IS NOT NULL AND content != ''"
+        ).fetchone()
+        return row["cnt"] if row else 0
+
+    def analysis_stats(self) -> dict:
+        """Return statistics about analysis results."""
+        opinions_count = self._conn.execute(
+            "SELECT COUNT(*) as cnt FROM analysis_opinions"
+        ).fetchone()["cnt"]
+        events_count = self._conn.execute(
+            "SELECT COUNT(*) as cnt FROM news_events"
+        ).fetchone()["cnt"]
+        opinions_by_variety = self._conn.execute(
+            "SELECT variety, COUNT(*) as cnt FROM analysis_opinions GROUP BY variety ORDER BY cnt DESC"
+        ).fetchall()
+        events_affecting = self._conn.execute(
+            "SELECT COUNT(*) as cnt FROM news_events WHERE affects_futures = 1"
+        ).fetchone()["cnt"]
+
+        return {
+            "total_opinions": opinions_count,
+            "total_events": events_count,
+            "events_affecting_futures": events_affecting,
+            "opinions_by_variety": {r["variety"]: r["cnt"] for r in opinions_by_variety},
+        }
 
     def close(self):
         """Close the thread-local connection."""

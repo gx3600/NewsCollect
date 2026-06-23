@@ -22,3 +22,19 @@ proxy:
 
 # User agent (default browser impersonation handles this, fallback only)
 user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+# DeepSeek API configuration for news analysis
+deepseek:
+  api_key: "sk-b43d341c29a64330bf7c9c9a423afdab"
+  base_url: "https://api.deepseek.com/v1"
+  model: "deepseek-v4-flash"          # V4 Flash (284B, 1M context)
+  max_tokens: 4096
+  temperature: 0.1
+  timeout: 120
+  max_retries: 3
+
+# News analysis schedule settings
+analysis:
+  interval: 30                        # seconds between analysis polls
+  batch_size: 50                      # max items per batch
+  concurrency: 50                     # max concurrent LLM requests

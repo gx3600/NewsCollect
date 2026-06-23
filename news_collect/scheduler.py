@@ -65,6 +65,21 @@ class DaemonScheduler:
 
             schedule.every(interval).seconds.do(make_job(name))
 
+        # Schedule news analysis task
+        analysis_interval = self.config.analysis_interval
+        if self.config.deepseek_api_key:
+            logger.info(
+                f"Scheduling news analysis: every {analysis_interval}s "
+                f"(batch={self.config.analysis_batch_size}, "
+                f"concurrency={self.config.analysis_concurrency})"
+            )
+            schedule.every(analysis_interval).seconds.do(self._run_analysis)
+        else:
+            logger.warning(
+                "DeepSeek API key not configured — news analysis is DISABLED. "
+                "Set deepseek.api_key in config/settings.yaml."
+            )
+
         # Run immediately on start
         logger.info("Running initial crawl for all sources...")
         for name in self.config.enabled_sources:
@@ -100,6 +115,27 @@ class DaemonScheduler:
             )
         except Exception as e:
             logger.error(f"[{name} #{run_id}] Error: {e}", exc_info=self.verbose)
+
+    def _run_analysis(self):
+        """Run a single news analysis cycle."""
+        from news_collect.core.analyzer import NewsAnalyzer
+
+        try:
+            analyzer = NewsAnalyzer()
+            unprocessed = analyzer.unprocessed_count()
+            if unprocessed > 0:
+                logger.info(f"[analysis] {unprocessed} unprocessed items pending")
+            stats = analyzer.run_once()
+            s = stats
+            logger.debug(
+                f"[analysis] cycle #{s['cycles']} — "
+                f"processed={s['total_processed']}, "
+                f"opinions={s['total_opinions']}, "
+                f"events={s['total_events']}, "
+                f"failures={s['total_failures']}"
+            )
+        except Exception as e:
+            logger.error(f"[analysis] Error: {e}", exc_info=self.verbose)
 
     def _handle_shutdown(self, signum, frame):
         """Graceful shutdown on signal."""

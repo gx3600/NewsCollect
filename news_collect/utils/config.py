@@ -133,3 +133,49 @@ class Config:
     @property
     def log_level(self) -> str:
         return self.settings.get("log_level", "INFO")
+
+    # ── DeepSeek API settings ──────────────────────────────
+
+    @property
+    def deepseek_api_key(self) -> str:
+        return self.settings.get("deepseek", {}).get("api_key", "")
+
+    @property
+    def deepseek_base_url(self) -> str:
+        return self.settings.get("deepseek", {}).get(
+            "base_url", "https://api.deepseek.com/v1"
+        )
+
+    @property
+    def deepseek_model(self) -> str:
+        return self.settings.get("deepseek", {}).get("model", "deepseek-chat")
+
+    @property
+    def deepseek_max_tokens(self) -> int:
+        return self.settings.get("deepseek", {}).get("max_tokens", 4096)
+
+    @property
+    def deepseek_temperature(self) -> float:
+        return self.settings.get("deepseek", {}).get("temperature", 0.1)
+
+    @property
+    def deepseek_timeout(self) -> int:
+        return self.settings.get("deepseek", {}).get("timeout", 120)
+
+    @property
+    def deepseek_max_retries(self) -> int:
+        return self.settings.get("deepseek", {}).get("max_retries", 3)
+
+    # ── analysis settings ──────────────────────────────────
+
+    @property
+    def analysis_interval(self) -> int:
+        return self.settings.get("analysis", {}).get("interval", 30)
+
+    @property
+    def analysis_batch_size(self) -> int:
+        return self.settings.get("analysis", {}).get("batch_size", 50)
+
+    @property
+    def analysis_concurrency(self) -> int:
+        return self.settings.get("analysis", {}).get("concurrency", 50)
