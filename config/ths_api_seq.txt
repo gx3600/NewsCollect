@@ -1,2 +1,2 @@
 # THS API last fetched seq (edit manually if needed)
-seq=677765150
+seq=677765663

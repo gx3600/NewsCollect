@@ -131,7 +131,11 @@ class NewsAnalyzer:
                     failed_urls.append(item["url"])
 
             elif article_type == "event":
-                parsed = self._parse_events(item["url"], llm_result)
+                parsed = self._parse_events(
+                    item["url"], llm_result,
+                    item.get("publish_time"),
+                    item.get("crawl_time"),
+                )
                 if parsed:
                     events_to_insert.extend(parsed)
                     processed_urls.append(item["url"])
@@ -225,15 +229,22 @@ class NewsAnalyzer:
                 logger.error(f"Error parsing opinion for {url}: {e}")
         return records
 
-    def _parse_events(self, url: str, result: dict) -> list[NewsEvent]:
+    def _parse_events(self, url: str, result: dict,
+                       publish_time: Optional[str] = None,
+                       crawl_time: Optional[str] = None) -> list[NewsEvent]:
         """Parse event-type LLM response into NewsEvent records.
 
         Filters affected_variety to only include whitelisted varieties.
+        Falls back to article publish_time → crawl_time when LLM returns
+        no event_time.
         """
         events_data = result.get("events", [])
         if not events_data:
             logger.warning(f"Event result for {url} has empty events list")
             return []
+
+        # Build fallback date: publish_time first, then crawl_time
+        fallback_date = self._extract_date(publish_time) or self._extract_date(crawl_time)
 
         records = []
         for ev in events_data:
@@ -257,10 +268,18 @@ class NewsAnalyzer:
                             f"not in whitelist for {url} — cleared"
                         )
 
+                # event_time: prefer LLM result, fallback to article publish date
+                event_time = ev.get("event_time") or None
+                if not event_time and fallback_date:
+                    event_time = fallback_date
+                    logger.debug(
+                        f"Event for {url}: event_time fell back to {fallback_date}"
+                    )
+
                 record = NewsEvent(
                     url=url,
                     event_summary=ev.get("event_summary", ""),
-                    event_time=ev.get("event_time") or None,
+                    event_time=event_time,
                     keywords=ev.get("keywords", ""),
                     affects_futures=bool(affects),
                     affected_variety=affected_variety,
@@ -271,6 +290,18 @@ class NewsAnalyzer:
             except Exception as e:
                 logger.error(f"Error parsing event for {url}: {e}")
         return records
+
+    @staticmethod
+    def _extract_date(iso_string: Optional[str]) -> str:
+        """Extract YYYY-MM-DD date string from an ISO timestamp."""
+        if not iso_string:
+            return ""
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(str(iso_string).replace("Z", "+00:00"))
+            return dt.strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            return ""
 
     # ── utility ──────────────────────────────────────────────
 
