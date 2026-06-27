@@ -23,11 +23,9 @@ env/
 htmlcov/
 
 # Runtime data
-data/news.db
-data/news.db-shm
-data/news.db-wal
-data/checkpoints/
-data/daemon.log
+data/
+config/data/
+*.bak
 
 # Claude Code
 .claude/

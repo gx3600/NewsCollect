@@ -112,12 +112,24 @@ class NewsStorage:
                 url TEXT NOT NULL,
                 event_summary TEXT NOT NULL,
                 event_time TEXT,
+                keywords TEXT DEFAULT '',
                 affects_futures INTEGER NOT NULL DEFAULT 0,
                 affected_variety TEXT,
+                impact_level TEXT DEFAULT '',
                 impact_analysis TEXT,
                 created_at TEXT NOT NULL
             )
         """)
+        # Migrate: add keywords column to existing table
+        try:
+            conn.execute("ALTER TABLE news_events ADD COLUMN keywords TEXT DEFAULT ''")
+        except Exception:
+            pass  # column already exists
+        # Migrate: add impact_level column to existing table
+        try:
+            conn.execute("ALTER TABLE news_events ADD COLUMN impact_level TEXT DEFAULT ''")
+        except Exception:
+            pass  # column already exists
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_events_url
             ON news_events(url)
@@ -250,12 +262,19 @@ class NewsStorage:
     def fetch_unprocessed(self, limit: int = 50) -> list[dict]:
         """Fetch unprocessed news items (processed=0), oldest first.
 
+        Includes items whose content is empty but whose title is long enough
+        (>20 chars) to serve as content for the LLM (e.g. Sina 7x24 flash news).
+
         Returns list of dicts with keys: id, url, title, source, content, publish_time.
         """
         rows = self._conn.execute(
             """SELECT id, url, title, source, content, publish_time
                FROM news
-               WHERE processed = 0 AND content IS NOT NULL AND content != ''
+               WHERE processed = 0
+                 AND (
+                   (content IS NOT NULL AND content != '')
+                   OR (length(title) > 20)
+                 )
                ORDER BY crawl_time ASC
                LIMIT ?""",
             (limit,),
@@ -299,15 +318,17 @@ class NewsStorage:
         try:
             self._conn.execute(
                 """INSERT INTO news_events
-                   (url, event_summary, event_time, affects_futures,
-                    affected_variety, impact_analysis, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   (url, event_summary, event_time, keywords, affects_futures,
+                    affected_variety, impact_level, impact_analysis, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     event.url,
                     event.event_summary,
                     event.event_time,
+                    event.keywords or "",
                     1 if event.affects_futures else 0,
                     event.affected_variety,
+                    event.impact_level or "",
                     event.impact_analysis,
                     event.created_at,
                 ),
@@ -325,26 +346,93 @@ class NewsStorage:
                 count += 1
         return count
 
+    def _retry_on_lock(self, fn, *args, max_retries: int = 5):
+        """Retry a DB write operation on SQLite lock errors with backoff."""
+        import time
+        for attempt in range(max_retries):
+            try:
+                return fn(*args)
+            except Exception as e:
+                err = str(e).lower()
+                if "locked" in err or "database is" in err:
+                    wait = 0.05 * (2 ** attempt)  # 50ms, 100ms, 200ms, 400ms, 800ms
+                    time.sleep(wait)
+                    continue
+                return None  # non-lock error → don't retry
+        return None  # all retries exhausted
+
     def mark_processed(self, url: str) -> bool:
         """Mark a news item as processed (processed=1)."""
-        try:
+
+        def _do():
             self._conn.execute(
                 "UPDATE news SET processed = 1 WHERE url = ?", (url,)
             )
             self._conn.commit()
             return True
-        except Exception:
-            return False
+
+        return self._retry_on_lock(_do) or False
 
     def mark_processed_batch(self, urls: list[str]) -> int:
         """Mark multiple URLs as processed. Returns count updated."""
         if not urls:
             return 0
-        try:
+
+        def _do():
             placeholders = ",".join("?" for _ in urls)
             cursor = self._conn.execute(
                 f"UPDATE news SET processed = 1 WHERE url IN ({placeholders})",
                 urls,
+            )
+            self._conn.commit()
+            return cursor.rowcount
+
+        return self._retry_on_lock(_do) or 0
+
+    def mark_failed(self, url: str) -> bool:
+        """Mark a news item as failed (processed=2). Failed items are
+        excluded from future analysis cycles to avoid wasting tokens."""
+
+        def _do():
+            self._conn.execute(
+                "UPDATE news SET processed = 2 WHERE url = ?", (url,)
+            )
+            self._conn.commit()
+            return True
+
+        return self._retry_on_lock(_do) or False
+
+    def mark_failed_batch(self, urls: list[str]) -> int:
+        """Mark multiple URLs as failed (processed=2). Returns count updated."""
+        if not urls:
+            return 0
+
+        def _do():
+            placeholders = ",".join("?" for _ in urls)
+            cursor = self._conn.execute(
+                f"UPDATE news SET processed = 2 WHERE url IN ({placeholders})",
+                urls,
+            )
+            self._conn.commit()
+            return cursor.rowcount
+
+        return self._retry_on_lock(_do) or 0
+
+    def mark_no_content_failed(self) -> int:
+        """Mark unprocessable items as failed (processed=2).
+
+        Only marks items where content is empty AND the title is too short
+        (<=20 chars) to serve as content. Items with long titles (e.g. Sina
+        7x24 flash news) are kept for analysis — the title will be used as
+        the LLM prompt content.
+        Returns the count of items marked.
+        """
+        try:
+            cursor = self._conn.execute(
+                """UPDATE news SET processed = 2
+                   WHERE processed = 0
+                   AND (content IS NULL OR content = '')
+                   AND length(title) <= 20"""
             )
             self._conn.commit()
             return cursor.rowcount

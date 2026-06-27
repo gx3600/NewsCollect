@@ -25,13 +25,16 @@ user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
 # DeepSeek API configuration for news analysis
 deepseek:
-  api_key: "sk-b43d341c29a64330bf7c9c9a423afdab"
+  api_key: "sk-aab4c0fc26fa45a7a2fe1760a3995eb3"
   base_url: "https://api.deepseek.com/v1"
   model: "deepseek-v4-flash"          # V4 Flash (284B, 1M context)
   max_tokens: 4096
   temperature: 0.1
   timeout: 120
   max_retries: 3
+
+# Futures variety whitelist (Excel file path)
+futures_variety_path: "config/futures_variety.xlsx"
 
 # News analysis schedule settings
 analysis:

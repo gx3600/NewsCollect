@@ -53,7 +53,7 @@ class BaseNewsSpider(Spider):
     ]
 
     # CSS selectors for article body text on detail pages, tried in order.
-    # The first selector that returns >100 chars of text is used.
+    # The first selector that returns >50 chars of text is used.
     content_selectors: list[str] = [
         "#ContentBody p::text",
         "#article_content p::text",
@@ -76,6 +76,9 @@ class BaseNewsSpider(Spider):
         "[class*=article-content] p::text",
         "[class*=article__body] p::text",
         ".text p::text",
+        # ── bare-text fallback for pages without <p> tags (e.g. Sina 7x24) ──
+        "#artibody::text",
+        ".news-content .article::text",
         "p::text",
     ]
 
@@ -309,7 +312,13 @@ class BaseNewsSpider(Spider):
                         # Collect and filter text from matched elements
                         texts = []
                         for p in paragraphs:
-                            t = str(p).strip() if isinstance(p, str) else str(p).strip()
+                            # Scrapling may return plain str (::text) or
+                            # Adaptor wrapping an element node. Try .text()
+                            # first, then fall back to str().
+                            if hasattr(p, "text"):
+                                t = p.text().strip()
+                            else:
+                                t = str(p).strip()
                             if not t:
                                 continue
                             # Skip boilerplate
@@ -327,11 +336,77 @@ class BaseNewsSpider(Spider):
                                     continue
                             texts.append(t)
                         content = "\n".join(texts)
-                        if len(content) > 100:
+                        if len(content) > 50:
                             logger.debug(f"Content extracted from {url[:80]} using '{sel}': {len(content)} chars")
                             return content
                 except Exception:
                     continue
+
+            # ── bare-div fallback (pages without <p> tags, e.g. Sina 7x24) ──
+            # Try common article containers and grab text from the main block.
+            bare_selectors = [
+                "#artibody",
+                ".article",
+                "[class*=article-body]",
+                "[class*=article-content]",
+            ]
+            for bare_sel in bare_selectors:
+                try:
+                    container = resp.css(bare_sel)
+                    if container:
+                        for c in container:
+                            t = c.text().strip() if hasattr(c, "text") else str(c).strip()
+                            if not t or len(t) < 50:
+                                continue
+                            if any(bp in t for bp in self._boilerplate_patterns):
+                                continue
+                            logger.debug(
+                                f"Content extracted from {url[:80]} "
+                                f"using bare-div '{bare_sel}': {len(t)} chars"
+                            )
+                            return t
+                except Exception:
+                    continue
+
+            # ── regex fallback (malformed HTML Parsel can't parse) ──
+            # Last resort: use regex to strip tags and extract visible text.
+            try:
+                import re
+                body = resp.body
+                if isinstance(body, bytes):
+                    body = body.decode("utf-8", errors="replace")
+                # Remove scripts and styles
+                body = re.sub(
+                    r"<(script|style)[^>]*>.*?</\1>",
+                    " ", body, flags=re.DOTALL | re.IGNORECASE,
+                )
+                # Strip all HTML tags — each replaced by newline to separate blocks
+                text = re.sub(r"<\s*/\s*br\s*>", "\n", body, flags=re.IGNORECASE)
+                text = re.sub(r"<\s*/\s*(p|div|h\d|li|tr)\s*>", "\n", text, flags=re.IGNORECASE)
+                text = re.sub(r"<[^>]+>", " ", text)
+                text = re.sub(r"&nbsp;", " ", text)
+                text = re.sub(r"&lt;", "<", text)
+                text = re.sub(r"&gt;", ">", text)
+                text = re.sub(r"&amp;", "&", text)
+                # Collapse whitespace per-line then join
+                lines = []
+                for line in text.split("\n"):
+                    line = re.sub(r"\s+", " ", line).strip()
+                    if not line or len(line) < 15:
+                        continue
+                    if any(bp in line for bp in self._boilerplate_patterns):
+                        continue
+                    lines.append(line)
+                content = "\n".join(lines)
+                if len(content) > 50:
+                    logger.debug(
+                        f"Content extracted from {url[:80]} "
+                        f"using regex fallback: {len(content)} chars"
+                    )
+                    return content
+            except Exception:
+                pass
+
             logger.debug(f"No content found for {url[:80]}")
             return None
         except Exception as e:

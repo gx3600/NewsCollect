@@ -62,8 +62,10 @@ class NewsEvent:
     url: str
     event_summary: str                    # 事件简述
     event_time: Optional[str] = None      # 事件发生时间 (YYYY-MM-DD HH:MM 或 null)
+    keywords: str = ""                    # 新闻关键字，逗号分隔
     affects_futures: bool = False         # 是否直接影响期货市场
     affected_variety: str = ""            # 影响品种
+    impact_level: str = ""                # 影响程度: 弱/一般/强/很强
     impact_analysis: str = ""             # 影响分析
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 

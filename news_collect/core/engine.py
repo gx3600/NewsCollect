@@ -47,6 +47,7 @@ class CrawlerEngine:
         self,
         names: Optional[list[str]] = None,
         dev_mode: bool = False,
+        max_items_override: Optional[int] = None,
     ) -> "CrawlResult":
         """Run one or more named sources synchronously.
 
@@ -56,6 +57,8 @@ class CrawlerEngine:
         Args:
             names: List of source names to run. If None, runs all enabled sources.
             dev_mode: If True, use cached responses (no live HTTP).
+            max_items_override: If set, temporarily overrides the source's
+                configured max_items (useful for backfill/catch-up runs).
 
         Returns:
             CrawlResult with stats and items.
@@ -88,7 +91,7 @@ class CrawlerEngine:
             logger.info(f"─── Running source: {name} ───")
 
             try:
-                items = self._run_single_source(name, source_cfg, dev_mode)
+                items = self._run_single_source(name, source_cfg, dev_mode, max_items_override)
                 all_items.extend(items)
                 source_stats[name] = {
                     "items": len(items),
@@ -135,6 +138,7 @@ class CrawlerEngine:
         name: str,
         source_cfg,
         dev_mode: bool,
+        max_items_override: Optional[int] = None,
     ) -> list[NewsItem]:
         """Run a single source spider synchronously and return its items.
 
@@ -146,11 +150,16 @@ class CrawlerEngine:
         if SpiderCls is None:
             raise ValueError(f"Source '{name}' is not registered.")
 
+        # Effective max_items: override takes precedence, then config, then default
+        effective_max = (
+            max_items_override
+            if max_items_override is not None
+            else getattr(source_cfg, "max_items", 0) or 0
+        )
+
         # ── RSS source path ───────────────────────────────────
         if source_cfg.use_rss:
-            spider = SpiderCls(
-                max_items=getattr(source_cfg, "max_items", 0) or 0,
-            )
+            spider = SpiderCls(max_items=effective_max)
             result = spider.start()
 
             items: list[NewsItem] = []
@@ -169,7 +178,7 @@ class CrawlerEngine:
         spider.development_mode = dev_mode
         spider.download_delay = source_cfg.download_delay
         spider.fetch_content = source_cfg.fetch_content
-        spider.max_items = getattr(source_cfg, "max_items", 10)
+        spider.max_items = max_items_override if max_items_override is not None else getattr(source_cfg, "max_items", 10)
 
         # start() blocks until complete (uses anyio.run internally)
         result = spider.start()

@@ -248,6 +248,13 @@ class THSApiSpider(BaseNewsSpider):
 
                     content = _fetch_content(url)
 
+                    # Fallback: if the API couldn't get content, try HTML scraping
+                    if not content:
+                        try:
+                            content = await self._fetch_article_content(url)
+                        except Exception:
+                            pass
+
                     yield {
                         "url": url,
                         "title": title,
