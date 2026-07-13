@@ -117,6 +117,7 @@ class NewsStorage:
                 affected_variety TEXT,
                 impact_level TEXT DEFAULT '',
                 impact_analysis TEXT,
+                expected_end_time TEXT,
                 created_at TEXT NOT NULL
             )
         """)
@@ -130,6 +131,11 @@ class NewsStorage:
             conn.execute("ALTER TABLE news_events ADD COLUMN impact_level TEXT DEFAULT ''")
         except Exception:
             pass  # column already exists
+        # Migrate: add expected_end_time column
+        try:
+            conn.execute("ALTER TABLE news_events ADD COLUMN expected_end_time TEXT")
+        except Exception:
+            pass
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_events_url
             ON news_events(url)
@@ -319,8 +325,9 @@ class NewsStorage:
             self._conn.execute(
                 """INSERT INTO news_events
                    (url, event_summary, event_time, keywords, affects_futures,
-                    affected_variety, impact_level, impact_analysis, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    affected_variety, impact_level, impact_analysis,
+                    expected_end_time, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     event.url,
                     event.event_summary,
@@ -330,6 +337,7 @@ class NewsStorage:
                     event.affected_variety,
                     event.impact_level or "",
                     event.impact_analysis,
+                    event.expected_end_time,
                     event.created_at,
                 ),
             )

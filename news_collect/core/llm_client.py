@@ -69,7 +69,8 @@ CLASSIFICATION_PROMPT_TEMPLATE = """请分析以下新闻，先根据分类标�
       "affects_futures": true,
       "affected_variety": "受影响的品种名（必须在白名单中），多个用逗号分隔",
       "impact_level": "弱",
-      "impact_analysis": "该事件对相关期货品种的影响分析"
+      "impact_analysis": "该事件对相关期货品种的影响分析",
+      "expected_end_time": "2024-07-15 或 null"
     }}
   ]
 }}
@@ -90,9 +91,10 @@ CLASSIFICATION_PROMPT_TEMPLATE = """请分析以下新闻，先根据分类标�
 6. short_term_view 和 long_term_view 只能是 "利多"、"利空" 或 "震荡"
 7. 如果只含短期观点，long_term_view 和 long_term_view_reason 置空字符串；反之亦然
 8. affects_futures 为 true 或 false
-9. **keywords 必填**：从新闻正文中提取最重要的关键词、核心名词、关键数据（如价格、涨跌幅、库存量、持仓变化等），用逗号分隔。必须至少包含3个关键词，不可留空
+9. **keywords 必填**：从新闻正文中提取最重要的关键词、核心名词，用逗号分隔。必须至少包含3个关键词，不可留空
 10. **impact_level 必填**：当 affects_futures 为 true 时必填，只能是 "弱"、"一般"、"强" 或 "很强"。判断依据：该事件短期内对受影响最重的期货品种价格的预期涨跌幅度 — 弱(3%以内)、一般(3%-5%)、强(5%-10%)、很强(10%以上)。如果 affects_futures 为 false，impact_level 置空字符串
-11. 完全不涉及白名单品种或不影响白名单品种 → 返回 irrelevant
+11. **expected_end_time**：如果新闻中明确提到事件的结束/决议/公布时间点或某事件预计会发生的事件（如会议日期、政策生效日、数据发布日期、谈判截止日），填入该日期（YYYY-MM-DD格式，如果没有提及具体某月某日，则用预计可能发生的最早的一天）。如果事件是长期的、没有明确结束点的（如持续性地缘冲突、行业趋势、长期政策），填 null
+12. 完全不涉及白名单品种或不影响白名单品种 → 返回 irrelevant
 """
 
 

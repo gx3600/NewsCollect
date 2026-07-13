@@ -285,6 +285,7 @@ class NewsAnalyzer:
                     affected_variety=affected_variety,
                     impact_level=ev.get("impact_level", ""),
                     impact_analysis=ev.get("impact_analysis", ""),
+                    expected_end_time=ev.get("expected_end_time") or None,
                 )
                 records.append(record)
             except Exception as e:

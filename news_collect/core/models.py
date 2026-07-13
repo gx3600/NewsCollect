@@ -67,6 +67,7 @@ class NewsEvent:
     affected_variety: str = ""            # 影响品种
     impact_level: str = ""                # 影响程度: 弱/一般/强/很强
     impact_analysis: str = ""             # 影响分析
+    expected_end_time: Optional[str] = None  # 预计事件结束时间 (YYYY-MM-DD 或 null)
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
     def to_dict(self) -> dict:
