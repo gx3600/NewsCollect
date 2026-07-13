@@ -8,6 +8,7 @@ Persistence: tracks last successful crawl time per source in
 crawls so that no news window is missed.
 """
 
+import concurrent.futures
 import json
 import logging
 import signal
@@ -56,6 +57,7 @@ class DaemonScheduler:
 
         # Load persisted crawl state
         self._state: dict[str, dict] = self._load_state()
+        self._state_lock = threading.Lock()
 
         # Background analysis thread
         self._analysis_thread: Optional[threading.Thread] = None
@@ -146,16 +148,17 @@ class DaemonScheduler:
     def _mark_crawled(self, name: str, coverage_until: Optional[datetime] = None):
         """Record a successful crawl and its coverage window."""
         now = datetime.now(timezone.utc)
-        entry = self._state.get(name, {})
-        if isinstance(entry, str):
-            entry = {"last_crawl": entry}
-        entry["last_crawl"] = now.isoformat()
-        if coverage_until is not None:
-            entry["coverage_until"] = coverage_until.isoformat()
-        else:
-            entry["coverage_until"] = now.isoformat()
-        self._state[name] = entry
-        self._save_state()
+        with self._state_lock:
+            entry = self._state.get(name, {})
+            if isinstance(entry, str):
+                entry = {"last_crawl": entry}
+            entry["last_crawl"] = now.isoformat()
+            if coverage_until is not None:
+                entry["coverage_until"] = coverage_until.isoformat()
+            else:
+                entry["coverage_until"] = now.isoformat()
+            self._state[name] = entry
+            self._save_state()
 
     # ── main loop ───────────────────────────────────────────
 
@@ -236,17 +239,48 @@ class DaemonScheduler:
         # ── backfill phase ────────────────────────────────────
         # Sources with significant gaps are backfilled first (largest gap first),
         # then all remaining sources run an initial crawl.
+        # ALL initial crawls run concurrently in threads so that a slow source
+        # (e.g. THS API iterating many contracts) does not block others.
+        initial_names: list[tuple[str, bool]] = []  # (name, is_backfill)
+
         if sources_to_backfill:
             backfill_names = [n for n, _ in sorted(sources_to_backfill, key=lambda x: -x[1])]
             logger.info(
                 f"Backfilling {len(backfill_names)} source(s): {backfill_names}"
             )
             for name in backfill_names:
-                self._backfill_source(engine, name)
+                initial_names.append((name, True))
 
-        logger.info("Running initial crawl for remaining sources...")
         for name in sources_ok:
-            self._crawl_source(engine, name)
+            initial_names.append((name, False))
+
+        if initial_names:
+            logger.info(
+                f"Running initial crawl for {len(initial_names)} source(s) concurrently..."
+            )
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(len(initial_names), 10)
+            ) as pool:
+                futures: dict[concurrent.futures.Future, str] = {}
+                for name, is_backfill in initial_names:
+                    if is_backfill:
+                        fut = pool.submit(self._backfill_source, engine, name)
+                    else:
+                        fut = pool.submit(self._crawl_source, engine, name)
+                    futures[fut] = name
+
+                # Wait for all initial crawls to complete (or fail) before
+                # entering the main loop, so that the first round of analysis
+                # has actual data to process.
+                for fut in concurrent.futures.as_completed(futures):
+                    name = futures[fut]
+                    try:
+                        fut.result()
+                    except Exception as e:
+                        logger.error(
+                            f"Initial crawl for '{name}' failed: {e}",
+                            exc_info=self.verbose,
+                        )
 
         # ── main loop ────────────────────────────────────────
         logger.info("Daemon running. Press Ctrl+C to stop.")
